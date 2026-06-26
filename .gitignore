@@ -1,0 +1,11 @@
+/.agents
+/.codex
+/bin
+/include
+/lib
+/pyvenv.cfg
+/runs
+/sb3_drone.egg-info
+/share
+/lib64
+*.pyc
