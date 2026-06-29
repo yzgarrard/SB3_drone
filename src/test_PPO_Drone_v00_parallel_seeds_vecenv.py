@@ -17,41 +17,58 @@ torch.set_num_interop_threads(1)
 import gymnasium as gym
 import custom_envs
 from stable_baselines3 import PPO, SAC
+from stable_baselines3.common.callbacks import EvalCallback
 from stable_baselines3.common.logger import configure
 from stable_baselines3.common.vec_env import DummyVecEnv, VecMonitor, VecNormalize
 
 SEED_LIST = [1,2,3,4,5,6,7,8]
 TOTAL_TIMESTEPS = 1_000_000
+N_STEPS = 2048
+N_ENVS = 8
+N_STEPS_PER_ENV = N_STEPS // N_ENVS
 
 
 def train_seed(seed: int) -> dict:
     run_path = (
-        f"runs/drone_20260626_PPO_vecenv_normobs/test_PPO_Drone_v00_"
+        f"runs/drone_20260626_0_PPO_vecenv_normobs_targetkl_0p02_nenvs_{N_ENVS}/"
         f"_{time.strftime('%Y%m%d_%H%M%S')}_"
         f"_seed_{seed:04d}_"
         f"_Gaussian_"
     )
     start_time = time.perf_counter()
     env = None
+    eval_env = None
 
     try:
         new_logger = configure(run_path, ["csv", "tensorboard"])
-        env = DummyVecEnv([lambda: gym.make("custom_envs/TacDroneHover-v8")])
+        env = DummyVecEnv([lambda: gym.make("custom_envs/TacDroneHover-v8") for _ in range(N_ENVS)])
         env = VecMonitor(env)
         env = VecNormalize(env, norm_obs=True, norm_reward=False)
+        eval_env = DummyVecEnv([lambda: gym.make("custom_envs/TacDroneHover-v8")])
+        eval_env = VecMonitor(eval_env)
+        eval_env = VecNormalize(eval_env, norm_obs=True, norm_reward=False, training=False)
+        eval_env.seed(123456789)
+        eval_callback = EvalCallback(
+            eval_env, 
+            n_eval_episodes=50, 
+            eval_freq=max(50000 // N_ENVS, 1),
+            best_model_save_path=run_path,
+            verbose=0)
 
         policy_kwargs = dict(net_arch=[64, 64])
 
         model = PPO(
             "MlpPolicy",
             env,
+            n_steps=N_STEPS_PER_ENV,
             verbose=0,
             device="cpu",
             seed=seed,
+            target_kl=0.02,
             policy_kwargs=policy_kwargs,
         )
         model.set_logger(new_logger)
-        model.learn(total_timesteps=TOTAL_TIMESTEPS)
+        model.learn(total_timesteps=TOTAL_TIMESTEPS, callback=eval_callback)
 
         return {
             "seed": seed,
@@ -63,6 +80,8 @@ def train_seed(seed: int) -> dict:
     finally:
         if env is not None:
             env.close()
+        if eval_env is not None:
+            eval_env.close()
 
 
 def main() -> None:
