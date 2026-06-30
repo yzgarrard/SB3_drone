@@ -19,18 +19,18 @@ import custom_envs
 from stable_baselines3 import PPO, SAC
 from stable_baselines3.common.callbacks import EvalCallback
 from stable_baselines3.common.logger import configure
-from stable_baselines3.common.vec_env import DummyVecEnv, VecMonitor, VecNormalize
+from stable_baselines3.common.vec_env import DummyVecEnv, VecMonitor, VecNormalize, VecFrameStack
 
-SEED_LIST = [1,2,3,4,5,6,7,8]
-TOTAL_TIMESTEPS = 1_000_000
+SEED_LIST = [1,2,3,4]
+TOTAL_TIMESTEPS = 10_000_000
 N_STEPS = 2048
-N_ENVS = 8
+N_ENVS = 1
 N_STEPS_PER_ENV = N_STEPS // N_ENVS
 
 
 def train_seed(seed: int) -> dict:
     run_path = (
-        f"runs/drone_20260626_0_PPO_vecenv_normobs_targetkl_0p02_nenvs_{N_ENVS}/"
+        f"runs/drone_20260629_2_PPO_vecenv_normobs_targetkl_0p02_nenvs_{N_ENVS}/"
         f"_{time.strftime('%Y%m%d_%H%M%S')}_"
         f"_seed_{seed:04d}_"
         f"_Gaussian_"
@@ -44,9 +44,11 @@ def train_seed(seed: int) -> dict:
         env = DummyVecEnv([lambda: gym.make("custom_envs/TacDroneHover-v8") for _ in range(N_ENVS)])
         env = VecMonitor(env)
         env = VecNormalize(env, norm_obs=True, norm_reward=False)
+        env = VecFrameStack(env, n_stack=1)
         eval_env = DummyVecEnv([lambda: gym.make("custom_envs/TacDroneHover-v8")])
         eval_env = VecMonitor(eval_env)
         eval_env = VecNormalize(eval_env, norm_obs=True, norm_reward=False, training=False)
+        eval_env = VecFrameStack(eval_env, n_stack=1)
         eval_env.seed(123456789)
         eval_callback = EvalCallback(
             eval_env, 
@@ -61,6 +63,7 @@ def train_seed(seed: int) -> dict:
             "MlpPolicy",
             env,
             n_steps=N_STEPS_PER_ENV,
+            learning_rate=1e-4,
             verbose=0,
             device="cpu",
             seed=seed,

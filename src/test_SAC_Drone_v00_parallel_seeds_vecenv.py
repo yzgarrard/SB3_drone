@@ -21,14 +21,15 @@ from stable_baselines3.common.callbacks import EvalCallback
 from stable_baselines3.common.logger import configure
 from stable_baselines3.common.vec_env import DummyVecEnv, VecMonitor, VecNormalize
 
-SEED_LIST = [1,2,3,4,5,6,7,8]
+SEED_LIST = [1,2,3,4]
 TOTAL_TIMESTEPS = 1_000_000
-N_ENVS = 8
+N_ENVS = 1
+learning_rate = 1e-4
 
 
 def train_seed(seed: int) -> dict:
     run_path = (
-        f"runs/drone_20260626_0_SAC_vecenv_normobs_nenvs_{N_ENVS}/"
+        f"runs/drone_20260629_0_SAC_vecenv_normobs_nenvs_{N_ENVS}/"
         f"_{time.strftime('%Y%m%d_%H%M%S')}_"
         f"_seed_{seed:04d}_"
         f"_Gaussian_"
@@ -41,7 +42,7 @@ def train_seed(seed: int) -> dict:
         new_logger = configure(run_path, ["csv", "tensorboard"])
         env = DummyVecEnv([lambda: gym.make("custom_envs/TacDroneHover-v8") for _ in range(N_ENVS)])
         env = VecMonitor(env)
-        env = VecNormalize(env, norm_obs=True, norm_reward=False)
+        env = VecNormalize(env, norm_obs=True, norm_reward=True)
         eval_env = DummyVecEnv([lambda: gym.make("custom_envs/TacDroneHover-v8")])
         eval_env = VecMonitor(eval_env)
         eval_env = VecNormalize(eval_env, norm_obs=True, norm_reward=False, training=False)
@@ -53,13 +54,17 @@ def train_seed(seed: int) -> dict:
             best_model_save_path=run_path,
             verbose=0)
 
-        policy_kwargs = dict(net_arch=[64, 64])
+        policy_kwargs = dict(net_arch=dict(pi=[64, 64], qf=[64, 64]))
 
         model = SAC(
             "MlpPolicy",
             env,
-            learning_starts=10000,
-            gradient_steps=N_ENVS,
+            learning_starts=100000,
+            learning_rate=learning_rate,
+            train_freq=1,
+            gradient_steps=1,
+            batch_size=256,
+            gamma=0.99,
             verbose=0,
             device="cpu",
             seed=seed,
